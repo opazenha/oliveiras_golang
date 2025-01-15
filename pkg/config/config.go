@@ -13,6 +13,7 @@ type Config struct {
 	PythonPath    string
 	ScraperPath   string
 	ServerPort    string
+	GeminiKey     string
 }
 
 // Load loads configuration from environment variables
@@ -27,5 +28,6 @@ func Load() (*Config, error) {
 		PythonPath:    os.Getenv("PYTHON_PATH"),
 		ScraperPath:   os.Getenv("SCRAPER_PATH"),
 		ServerPort:    os.Getenv("SERVER_PORT"),
+		GeminiKey:     os.Getenv("GEMINI_API_KEY"),
 	}, nil
 }

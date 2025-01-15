@@ -2,11 +2,15 @@ package bot
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
+	"github.com/zenha/oliveiras/internal/database"
+	"github.com/zenha/oliveiras/internal/gemini"
 	"github.com/zenha/oliveiras/internal/models"
 	"github.com/zenha/oliveiras/internal/scraper"
 	"github.com/zenha/oliveiras/internal/telegram"
+	"github.com/zenha/oliveiras/pkg/config"
 )
 
 // Handler manages bot message handling
@@ -25,6 +29,19 @@ func NewHandler(telegramClient *telegram.Client, scraperService *scraper.Service
 
 // HandleMessage processes incoming bot messages
 func (h *Handler) HandleMessage(chatID int, message string) error {
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal("Failed to load configuration:", err)
+	}
+
+	// Initialize MongoDB client
+	mongoClient, err := database.NewClient(cfg.MongoURI)
+	if err != nil {
+		log.Fatal("Failed to connect to MongoDB:", err)
+	}
+	defer mongoClient.Disconnect()
+
 	parts := strings.Split(message, " ")
 	if len(parts) == 0 {
 		return nil
@@ -46,6 +63,42 @@ func (h *Handler) HandleMessage(chatID int, message string) error {
 
 		response := formatAnalysisResponse(airbnbAnalysis, bookingAnalysis)
 		return h.telegramClient.SendMessage(chatID, response)
+
+	case "/getprices":
+		if len(parts) != 3 {
+			return h.telegramClient.SendMessage(chatID, "Usage: /getprices start_date end_date")
+		}
+
+		startDate := parts[1]
+		endDate := parts[2]
+
+		airbnbListings, err := mongoClient.GetAirbnbByDate(startDate, endDate)
+		if err != nil {
+			return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+		}
+		bookingListings, err := mongoClient.GetBookingByDate(startDate, endDate)
+		if err != nil {
+			return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+		}
+
+		// fmt.Println("Handler - BookingListing: ", bookingListings[0])
+		// fmt.Println("Handler - AirbnbListing: ", airbnbListings[0])
+
+		geminiClient, err := gemini.NewClient(cfg.GeminiKey)
+		if err != nil {
+			log.Fatal("Failed to create Gemini client:", err)
+		}
+		bookingPrices, err := gemini.GenerateContent(geminiClient, gemini.PrepareBookingPrompt(bookingListings))
+		if err != nil {
+			return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+		}
+		airbnbPrices, err := gemini.GenerateContent(geminiClient, gemini.PrepareAirbnbPrompt(airbnbListings))
+		if err != nil {
+			return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+		}
+
+		telegramMessage := fmt.Sprintf("Booking Prices:\n%v\n\nAirbnb Prices:\n%v", bookingPrices, airbnbPrices)
+		return h.telegramClient.SendMessage(chatID, telegramMessage)
 
 	default:
 		return h.telegramClient.SendMessage(chatID, "Unknown command: "+parts[0])
