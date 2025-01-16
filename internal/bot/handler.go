@@ -7,7 +7,6 @@ import (
 
 	"github.com/zenha/oliveiras/internal/database"
 	"github.com/zenha/oliveiras/internal/gemini"
-	"github.com/zenha/oliveiras/internal/models"
 	"github.com/zenha/oliveiras/internal/scraper"
 	"github.com/zenha/oliveiras/internal/telegram"
 	"github.com/zenha/oliveiras/pkg/config"
@@ -81,8 +80,20 @@ func (h *Handler) HandleMessage(chatID int, message string) error {
 			return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
 		}
 
-		// fmt.Println("Handler - BookingListing: ", bookingListings[0])
-		// fmt.Println("Handler - AirbnbListing: ", airbnbListings[0])
+		airbnbDateList, err := separateAirbnbByDate(airbnbListings)
+		if err != nil {
+			return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+		}
+		bookingDateList, err := separateBookingByDate(bookingListings)
+		if err != nil {
+			return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+		}
+
+		airbnbOutOfDateList := getAirbnbOutOfDateList(airbnbDateList)
+		bookingOutOfDateList := getBookingOutOfDateList(bookingDateList)
+		if airbnbOutOfDateList != "" || bookingOutOfDateList != "" {
+			return h.telegramClient.SendMessage(chatID, "Data is not up to date. Please run /scrape command. Airbnbs: "+airbnbOutOfDateList+". Bookings: "+bookingOutOfDateList+".")
+		}
 
 		geminiClient, err := gemini.NewClient(cfg.GeminiKey)
 		if err != nil {
@@ -101,13 +112,6 @@ func (h *Handler) HandleMessage(chatID int, message string) error {
 		return h.telegramClient.SendMessage(chatID, telegramMessage)
 
 	default:
-		return h.telegramClient.SendMessage(chatID, "Unknown command: "+parts[0])
+		return h.telegramClient.SendMessage(chatID, "Unknown command: "+parts[0]+".\nUse /scrape command to scrape and analyze listings.\nUse /getprices command to get the prices suggestions.")
 	}
-}
-
-// formatAnalysisResponse formats the analysis results into a readable message
-func formatAnalysisResponse(airbnb, booking *models.ListingAnalysis) string {
-	return fmt.Sprintf("Airbnb Listings Data:\nAverage Price: %.2f\nHighest Price: %.2f\nLowest Price: %.2f\nTotal Listings: %d\n\nBooking Listings Data:\nAverage Price: %.2f\nHighest Price: %.2f\nLowest Price: %.2f\nTotal Listings: %d",
-		airbnb.AveragePrice, airbnb.HighestPrice, airbnb.LowestPrice, airbnb.TotalListings,
-		booking.AveragePrice, booking.HighestPrice, booking.LowestPrice, booking.TotalListings)
 }
