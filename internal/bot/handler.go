@@ -71,33 +71,49 @@ func (h *Handler) HandleMessage(chatID int, message string) error {
 		startDate := parts[1]
 		endDate := parts[2]
 
-		airbnbListings, err := mongoClient.GetAirbnbByDate(startDate, endDate)
+		// airbnbListings, err := mongoClient.GetAirbnbByDate(startDate, endDate)
+		// if err != nil {
+		// 	return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+		// }
+		// bookingListings, err := mongoClient.GetBookingByDate(startDate, endDate)
+		// if err != nil {
+		// 	return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+		// }
+
+		// airbnbDateList, err := separateAirbnbByDate(airbnbListings)
+		// if err != nil {
+		// 	return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+		// }
+		// bookingDateList, err := separateBookingByDate(bookingListings)
+		// if err != nil {
+		// 	return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+		// }
+
+		// airbnbOutOfDateList := getAirbnbOutOfDateList(airbnbDateList)
+		// bookingOutOfDateList := getBookingOutOfDateList(bookingDateList)
+		// if airbnbOutOfDateList != "" || bookingOutOfDateList != "" {
+		// 	return h.telegramClient.SendMessage(chatID, "Data is not up to date. Please run /scrape command. Airbnbs: "+airbnbOutOfDateList+". Bookings: "+bookingOutOfDateList+".")
+		// }
+
+		airbnbListings, err := mongoClient.GetAirbnbUpToDate(startDate, endDate)
 		if err != nil {
-			return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+			return h.telegramClient.SendMessage(chatID, "Failed to getAirbnbUpToDate. Error: "+err.Error())
 		}
-		bookingListings, err := mongoClient.GetBookingByDate(startDate, endDate)
-		if err != nil {
-			return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+		if len(airbnbListings) == 0 {
+			return h.telegramClient.SendMessage(chatID, "No Airbnb results that are up to date. Scrape the content for those dates using /scrape command.")
 		}
 
-		airbnbDateList, err := separateAirbnbByDate(airbnbListings)
+		bookingListings, err := mongoClient.GetBookingUpToDate(startDate, endDate)
 		if err != nil {
-			return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
+			return h.telegramClient.SendMessage(chatID, "Failed to getBookingUpToDate. Error: "+err.Error())
 		}
-		bookingDateList, err := separateBookingByDate(bookingListings)
-		if err != nil {
-			return h.telegramClient.SendMessage(chatID, "Error: "+err.Error())
-		}
-
-		airbnbOutOfDateList := getAirbnbOutOfDateList(airbnbDateList)
-		bookingOutOfDateList := getBookingOutOfDateList(bookingDateList)
-		if airbnbOutOfDateList != "" || bookingOutOfDateList != "" {
-			return h.telegramClient.SendMessage(chatID, "Data is not up to date. Please run /scrape command. Airbnbs: "+airbnbOutOfDateList+". Bookings: "+bookingOutOfDateList+".")
+		if len(bookingListings) == 0 {
+			return h.telegramClient.SendMessage(chatID, "No Booking results that are up to date. Scrape the content for those dates using /scrape command.")
 		}
 
 		geminiClient, err := gemini.NewClient(cfg.GeminiKey)
 		if err != nil {
-			log.Fatal("Failed to create Gemini client:", err)
+			return h.telegramClient.SendMessage(chatID, "Failed to create Gemini client:"+err.Error())
 		}
 		bookingPrices, err := gemini.GenerateContent(geminiClient, gemini.PrepareBookingPrompt(bookingListings))
 		if err != nil {

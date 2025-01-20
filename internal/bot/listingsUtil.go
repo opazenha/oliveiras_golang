@@ -52,6 +52,44 @@ func checkBookingDataUpToDate(bookingListings []models.BookingData) (bool, error
 	return false, nil
 }
 
+func filterBookingDataUpToDate(bookingListings []models.BookingData) ([]models.BookingData, error) {
+	upToDateList := []models.BookingData{}
+	for _, listing := range bookingListings {
+		if !strings.Contains(listing.InsertedAt, "Z") {
+			listing.InsertedAt += "Z"
+		}
+		insertedAt, err := time.Parse(time.RFC3339, listing.InsertedAt)
+		if err != nil {
+			log.Println("Error parsing Booking inserted_at:", err)
+			return []models.BookingData{}, err
+		}
+
+		if insertedAt.After(time.Now().AddDate(0, 0, -7)) {
+			upToDateList = append(upToDateList, bookingListings...)
+		}
+	}
+	return upToDateList, nil
+}
+
+func filterAirbnbDataUpToDate(airbnbListings []models.AirbnbData) ([]models.AirbnbData, error) {
+	upToDateList := []models.AirbnbData{}
+	for _, listing := range airbnbListings {
+		if !strings.Contains(listing.InsertedAt, "Z") {
+			listing.InsertedAt += "Z"
+		}
+		insertedAt, err := time.Parse(time.RFC3339, listing.InsertedAt)
+		if err != nil {
+			log.Println("Error parsing Airbnb inserted_at:", err)
+			return []models.AirbnbData{}, err
+		}
+
+		if insertedAt.After(time.Now().AddDate(0, 0, -7)) {
+			upToDateList = append(upToDateList, airbnbListings...)
+		}
+	}
+	return upToDateList, nil
+}
+
 func separateAirbnbByDate(listings []models.AirbnbData) (map[string][]models.AirbnbData, error) {
 	result := make(map[string][]models.AirbnbData)
 	for _, listing := range listings {

@@ -3,7 +3,9 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/zenha/oliveiras/internal/models"
 	"go.mongodb.org/mongo-driver/bson"
@@ -116,6 +118,112 @@ func (c *Client) GetBookingByDate(startDate, endDate string) ([]models.BookingDa
 	}
 
 	log.Printf("Query completed. Found %d results.\n", len(results))
+	return results, nil
+}
+
+func (c *Client) GetAirbnbUpToDate(startDate, endDate string) ([]models.AirbnbData, error) {
+	fmt.Printf("GetAirbnbUpToDate called with startDate: %s, endDate: %s\n", startDate, endDate)
+
+	collection := c.client.Database("oliveiras").Collection("airbnb")
+
+	// Parse the start and end dates just for validation
+	_, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start date: %v", err)
+	}
+	_, err = time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end date: %v", err)
+	}
+
+	// Calculate cutoff time and format it with nanosecond precision
+	cutoffTime := time.Now().AddDate(0, 0, -3)
+	cutoffStr := cutoffTime.Format("2006-01-02T15:04:05.999999")
+
+	fmt.Printf("Using cutoff date: %s\n", cutoffStr)
+
+	// Query the Airbnb collection with date range and recent update conditions
+	filter := bson.M{
+		"$or": []bson.M{
+			{
+				"start_date": startDate,
+				"end_date":   endDate,
+			},
+			{
+				"start_date": bson.M{"$gte": startDate},
+				"end_date":   bson.M{"$lte": endDate},
+			},
+		},
+		"inserted_at": bson.M{
+			"$gte": cutoffStr,
+		},
+	}
+
+	cursor, err := collection.Find(context.Background(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.Background())
+
+	var results []models.AirbnbData
+	if err := cursor.All(context.Background(), &results); err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Found %d results for Airbnb\n", len(results))
+	return results, nil
+}
+
+func (c *Client) GetBookingUpToDate(startDate, endDate string) ([]models.BookingData, error) {
+	fmt.Printf("GetBookingUpToDate called with startDate: %s, endDate: %s\n", startDate, endDate)
+
+	collection := c.client.Database("oliveiras").Collection("booking")
+
+	// Parse the start and end dates just for validation
+	_, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start date: %v", err)
+	}
+	_, err = time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end date: %v", err)
+	}
+
+	// Calculate cutoff time and format it with nanosecond precision
+	cutoffTime := time.Now().AddDate(0, 0, -3)
+	cutoffStr := cutoffTime.Format("2006-01-02T15:04:05.999999")
+
+	fmt.Printf("Using cutoff date: %s\n", cutoffStr)
+
+	// Query the Booking collection with date range and recent update conditions
+	filter := bson.M{
+		"$or": []bson.M{
+			{
+				"start_date": startDate,
+				"end_date":   endDate,
+			},
+			{
+				"start_date": bson.M{"$gte": startDate},
+				"end_date":   bson.M{"$lte": endDate},
+			},
+		},
+		"inserted_at": bson.M{
+			"$gte": cutoffStr,
+		},
+	}
+
+	cursor, err := collection.Find(context.Background(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.Background())
+
+	var results []models.BookingData
+	if err := cursor.All(context.Background(), &results); err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Found %d results for Booking\n", len(results))
 	return results, nil
 }
 
